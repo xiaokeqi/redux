@@ -9,9 +9,15 @@ import {
   ExtendState
 } from './types/store'
 import { Action } from './types/actions'
+// Reducer 函数类型，参数为state，action,
+// export type Reducer<S = any, A extends Action = AnyAction> = (
+//   state: S | undefined,
+//   action: A
+// ) => S
 import { Reducer } from './types/reducers'
 import ActionTypes from './utils/actionTypes'
 import isPlainObject from './utils/isPlainObject'
+
 
 /**
  * Creates a Redux store that holds the state tree.
@@ -38,6 +44,7 @@ import isPlainObject from './utils/isPlainObject'
  * @returns A Redux store that lets you read the state, dispatch actions
  * and subscribe to changes.
  */
+// 函数重载
 export default function createStore<
   S,
   A extends Action,

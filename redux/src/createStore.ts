@@ -45,6 +45,9 @@ import isPlainObject from './utils/isPlainObject'
  * and subscribe to changes.
  */
 // 函数重载
+// 函数重载一，参数为reducer、可选enchancer-增强器和一些中间件
+// 函数重载二，reducer，preloadedState-state初始值
+// 函数重载三，reducer,preloadedState_state初始值或storeEnchancer增强器，storeEnchancer增强器
 export default function createStore<
   S,
   A extends Action,
@@ -74,6 +77,8 @@ export default function createStore<
   preloadedState?: PreloadedState<S> | StoreEnhancer<Ext, StateExt>,
   enhancer?: StoreEnhancer<Ext, StateExt>
 ): Store<ExtendState<S, StateExt>, A, StateExt, Ext> & Ext {
+  // 根据参数类型做判断，不支持多个增强器在多个函数中
+  // 重载函数三中preloadedState  StoreEnhancer 且enhancer StoreEnhancer不支持
   if (
     (typeof preloadedState === 'function' && typeof enhancer === 'function') ||
     (typeof enhancer === 'function' && typeof arguments[3] === 'function')
@@ -84,27 +89,34 @@ export default function createStore<
         'together to a single function.'
     )
   }
-
+  
+  // 重载函数三，preloadedState为function，将其转为enhancer
   if (typeof preloadedState === 'function' && typeof enhancer === 'undefined') {
     enhancer = preloadedState as StoreEnhancer<Ext, StateExt>
     preloadedState = undefined
   }
 
+  // 增强器必须是函数，否则报错
   if (typeof enhancer !== 'undefined') {
     if (typeof enhancer !== 'function') {
       throw new Error('Expected the enhancer to be a function.')
     }
-
+    // as类型断言，与<类型>值写法相等
+    // & | 属于交叉类型，联合类型A|B表示一个类型为A或B的类型， A&B表示同时为A且B类型
+    // 执行增强器,将createStore传入，再在返回值函数中传入reducer,preloadedState。通过高阶函数实现重新调用
+    // createStore(reducer,preloadedState)实现增强作用
     return enhancer(createStore)(reducer, preloadedState as PreloadedState<
       S
     >) as Store<ExtendState<S, StateExt>, A, StateExt, Ext> & Ext
   }
+
 
   if (typeof reducer !== 'function') {
     throw new Error('Expected the reducer to be a function.')
   }
 
   let currentReducer = reducer
+  // as 类型断言
   let currentState = preloadedState as S
   let currentListeners: (() => void)[] | null = []
   let nextListeners = currentListeners

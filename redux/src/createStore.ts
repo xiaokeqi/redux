@@ -114,12 +114,16 @@ export default function createStore<
   if (typeof reducer !== 'function') {
     throw new Error('Expected the reducer to be a function.')
   }
-
+  // 当前reducer
   let currentReducer = reducer
-  // as 类型断言
+  // as 类型断言 当前state
   let currentState = preloadedState as S
+  // [function, function,function]
+  // 监听队列
   let currentListeners: (() => void)[] | null = []
+  // 浅拷贝
   let nextListeners = currentListeners
+  // 是否正在dispatching
   let isDispatching = false
 
   /**
@@ -130,6 +134,7 @@ export default function createStore<
    * subscribe/unsubscribe in the middle of a dispatch.
    */
   function ensureCanMutateNextListeners() {
+    // currentListeners 与 nextListeners同引用的话，“深拷贝”一份出来
     if (nextListeners === currentListeners) {
       nextListeners = currentListeners.slice()
     }
@@ -140,7 +145,10 @@ export default function createStore<
    *
    * @returns The current state tree of your application.
    */
+  // 获取当前state currentState
   function getState(): S {
+    // 正在dispatch的操作不可以getState,
+    // 因为dispatch操作是用来修改state的，这样可以保证获取到最新state
     if (isDispatching) {
       throw new Error(
         'You may not call store.getState() while the reducer is executing. ' +
@@ -175,11 +183,14 @@ export default function createStore<
    * @param listener A callback to be invoked on every dispatch.
    * @returns A function to remove this change listener.
    */
+  
+   // dispath事件监听函数，触发一次，执行一次
   function subscribe(listener: () => void) {
+    // listener必须是函数类型
     if (typeof listener !== 'function') {
       throw new Error('Expected the listener to be a function.')
     }
-
+    // 不可以在修改state时，调用subscribe，保证state只可同时被一个reducer更改
     if (isDispatching) {
       throw new Error(
         'You may not call store.subscribe() while the reducer is executing. ' +
@@ -188,17 +199,20 @@ export default function createStore<
           'See https://redux.js.org/api-reference/store#subscribelistener for more details.'
       )
     }
-
+    // 标志是否被订阅
     let isSubscribed = true
-
+    // 拷贝currentListener to nextListener
     ensureCanMutateNextListeners()
+    // 添加一个订阅函数
     nextListeners.push(listener)
-
+    
+    // 返回取消订阅函数
     return function unsubscribe() {
+      // 保证必须是已订阅才可以被取消订阅
       if (!isSubscribed) {
         return
       }
-
+      // 同上
       if (isDispatching) {
         throw new Error(
           'You may not unsubscribe from a store listener while the reducer is executing. ' +
@@ -207,10 +221,11 @@ export default function createStore<
       }
 
       isSubscribed = false
-
       ensureCanMutateNextListeners()
+      // 取消订阅，即删除订阅的listener
       const index = nextListeners.indexOf(listener)
       nextListeners.splice(index, 1)
+      // 为什么要把currentListeners置null呢？？? 内存释放？目前没有看到currentListeners的用途
       currentListeners = null
     }
   }
@@ -240,38 +255,42 @@ export default function createStore<
    * Note that, if you use a custom middleware, it may wrap `dispatch()` to
    * return something else (for example, a Promise you can await).
    */
+  // 触发state变更函数
   function dispatch(action: A) {
+    // 参数类型判断，必须为object,通过getPrototypeOf判断
     if (!isPlainObject(action)) {
       throw new Error(
         'Actions must be plain objects. ' +
           'Use custom middleware for async actions.'
       )
     }
-
+    // 类型判断，type为必传属性
     if (typeof action.type === 'undefined') {
       throw new Error(
         'Actions may not have an undefined "type" property. ' +
           'Have you misspelled a constant?'
       )
     }
-
+    // 不可以同时执行两个dispatch来修改state，保证state唯一
     if (isDispatching) {
       throw new Error('Reducers may not dispatch actions.')
     }
 
     try {
+      // 执行reducer,修改state值，返回修改后的state
       isDispatching = true
       currentState = currentReducer(currentState, action)
     } finally {
+      // 标记完成dispatch
       isDispatching = false
     }
-
+    //执行所有监听函数，主要用于渲染数据变更
     const listeners = (currentListeners = nextListeners)
     for (let i = 0; i < listeners.length; i++) {
       const listener = listeners[i]
       listener()
     }
-
+    // 返回传入的action
     return action
   }
 
@@ -285,6 +304,8 @@ export default function createStore<
    * @param nextReducer The reducer for the store to use instead.
    * @returns The same store instance with a new reducer in place.
    */
+
+   // 替换reducer，不常用，在react-redux的热加载机制里面用到了
   function replaceReducer<NewState, NewActions extends A>(
     nextReducer: Reducer<NewState, NewActions>
   ): Store<ExtendState<NewState, StateExt>, NewActions, StateExt, Ext> & Ext {
@@ -293,6 +314,7 @@ export default function createStore<
     }
 
     // TODO: do this more elegantly
+    // currentReucer = nexReducer 替换reducer
     ;((currentReducer as unknown) as Reducer<
       NewState,
       NewActions
@@ -302,8 +324,11 @@ export default function createStore<
     // Any reducers that existed in both the new and old rootReducer
     // will receive the previous state. This effectively populates
     // the new state tree with any relevant data from the old one.
+    // 采用新的reducer初始化state值
+    // ActionTypes.REPLACE标记replace 替换reducer操作
     dispatch({ type: ActionTypes.REPLACE } as A)
     // change the type of the store by casting it to the new store
+    // 返回store
     return (store as unknown) as Store<
       ExtendState<NewState, StateExt>,
       NewActions,
@@ -319,6 +344,7 @@ export default function createStore<
    * For more information, see the observable proposal:
    * https://github.com/tc39/proposal-observable
    */
+  // 应该主要是用于修改state，目前应该只redux-observable使用了，待确定
   function observable() {
     const outerSubscribe = subscribe
     return {
